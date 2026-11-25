@@ -1,9 +1,10 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { SUPABASE_KEY, SUPABASE_URL } from "./env";
+import { assertSupabaseEnv, SUPABASE_KEY, SUPABASE_URL } from "./env";
 
 /** Client per-request dengan sesi login (Server Components & Server Actions). */
 export async function createClient() {
+  assertSupabaseEnv();
   const store = await cookies();
   return createServerClient(SUPABASE_URL, SUPABASE_KEY, {
     cookies: {

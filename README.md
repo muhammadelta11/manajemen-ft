@@ -16,11 +16,11 @@ cp .env.example .env.local
 
 Isi dari **Project Settings → API**:
 
-| Variabel | Sumber |
-|----------|--------|
+| Variabel | Sumber di Dashboard → API |
+|----------|---------------------------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `anon` / publishable key |
-| `SUPABASE_SERVICE_ROLE_KEY` | `service_role` (server only) |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | **Publishable key** |
+| `SUPABASE_SECRET_KEY` | **Secret key** (server only) |
 
 4. Install & seed:
 
