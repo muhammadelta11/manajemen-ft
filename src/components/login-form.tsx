@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { finalizeLoginAction } from "@/app/actions/auth";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/button";
@@ -12,11 +12,6 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-
-  useEffect(() => {
-    setEmail("arsip@fakultas.ac.id");
-    setPassword("Password123!");
-  }, []);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -82,11 +77,6 @@ export function LoginForm() {
       <Button type="submit" className="w-full" size="lg" disabled={pending}>
         {pending ? "Memproses…" : "Masuk ke ruang kerja"}
       </Button>
-
-      <p className="text-center text-[11px] leading-relaxed text-[var(--muted)]">
-        Demo Admin Arsip sudah terisi. Password:{" "}
-        <code className="rounded bg-[var(--mist)] px-1.5 py-0.5">Password123!</code>
-      </p>
     </form>
   );
 }
