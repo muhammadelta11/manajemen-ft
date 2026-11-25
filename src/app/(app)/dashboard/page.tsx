@@ -8,6 +8,8 @@ import { requireUser } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SessionUser } from "@/lib/rbac";
 
+export const instant = false;
+
 export default async function DashboardPage() {
   // requireUser di-cache bersama layout — tidak dobel round-trip
   const user = await requireUser();

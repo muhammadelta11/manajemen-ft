@@ -2,6 +2,8 @@ import { AppShell } from "@/components/app-shell";
 import { requireUser } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 
+export const instant = false;
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const supabase = await createClient();
