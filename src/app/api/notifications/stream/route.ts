@@ -1,13 +1,14 @@
-import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return new Response("Unauthorized", { status: 401 });
 
-  const userId = session.user.id;
+  const userId = user.id;
   const encoder = new TextEncoder();
   let closed = false;
 
@@ -21,19 +22,24 @@ export async function GET(request: Request) {
       const tick = async () => {
         if (closed) return;
         try {
-          const unread = await prisma.notification.count({
-            where: { userId, readAt: null },
-          });
-          const latest = await prisma.notification.findFirst({
-            where: { userId },
-            orderBy: { createdAt: "desc" },
-            select: { id: true, judul: true, createdAt: true },
-          });
+          const admin = createAdminClient();
+          const { count } = await admin
+            .from("notifications")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", userId)
+            .is("read_at", null);
+          const { data: latest } = await admin
+            .from("notifications")
+            .select("id, judul, created_at")
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
           send("notifications", {
-            unread,
+            unread: count ?? 0,
             latestId: latest?.id ?? null,
             latestTitle: latest?.judul ?? null,
-            latestAt: latest?.createdAt?.toISOString() ?? null,
+            latestAt: latest?.created_at ?? null,
           });
         } catch {
           send("error", { message: "poll_failed" });

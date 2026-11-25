@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createAktivitasAction } from "@/app/actions/aktivitas";
-import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,13 +13,19 @@ export default async function AktivitasBaruPage() {
   const user = await requireUser();
   if (user.role !== "pegawai") redirect("/aktivitas");
 
-  const semesters = await prisma.semester.findMany({
-    orderBy: { label: "desc" },
-    take: 8,
-  });
+  const admin = createAdminClient();
+  const { data: semesters } = await admin
+    .from("semester")
+    .select("id, label")
+    .order("label", { ascending: false })
+    .limit(8);
 
-  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
-  const isTendik = dbUser?.jenisPegawai === "tendik";
+  const { data: dbUser } = await admin
+    .from("users")
+    .select("jenis_pegawai")
+    .eq("id", user.id)
+    .maybeSingle();
+  const isTendik = dbUser?.jenis_pegawai === "tendik";
 
   async function action(formData: FormData) {
     "use server";
@@ -85,7 +91,7 @@ export default async function AktivitasBaruPage() {
             className="h-10 w-full rounded-md border border-stone-300 bg-white px-3 text-sm"
           >
             <option value="">—</option>
-            {semesters.map((s) => (
+            {(semesters ?? []).map((s) => (
               <option key={s.id} value={s.id}>
                 {s.label}
               </option>

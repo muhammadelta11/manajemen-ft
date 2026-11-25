@@ -1,20 +1,22 @@
 import { AppShell } from "@/components/app-shell";
-import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-/** Auth + Prisma runtime data — allow blocking until Cache Components adopted fully. */
 export const instant = false;
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  const unreadCount = await prisma.notification.count({
-    where: { userId: user.id, readAt: null },
-  });
+  const admin = createAdminClient();
+  const { count } = await admin
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .is("read_at", null);
 
   return (
     <AppShell
       user={{ name: user.name, role: user.role, isKaprodi: user.isKaprodi }}
-      unreadCount={unreadCount}
+      unreadCount={count ?? 0}
     >
       {children}
     </AppShell>

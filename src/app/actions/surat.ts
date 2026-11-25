@@ -1,23 +1,22 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { JenisSurat, SuratStatus } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { canCreateDisposisi, canManageSurat } from "@/lib/rbac";
 import { storeFile } from "@/lib/storage";
 import { notifyUser, notifyUsers } from "@/lib/notifications";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { DisposisiRow, SuratRow } from "@/lib/types";
 
 function parseDate(value: FormDataEntryValue | null) {
-  const s = String(value ?? "");
-  return new Date(s);
+  return String(value ?? "");
 }
 
 export async function createSuratAction(formData: FormData) {
   const user = await requireUser();
   if (!canManageSurat(user.role)) throw new Error("Tidak diizinkan.");
 
-  const jenisSurat = String(formData.get("jenisSurat")) as JenisSurat;
+  const jenisSurat = String(formData.get("jenisSurat") ?? "") as "masuk" | "keluar";
   const nomorSurat = String(formData.get("nomorSurat") ?? "").trim();
   const perihal = String(formData.get("perihal") ?? "").trim();
   const asalTujuan = String(formData.get("asalTujuan") ?? "").trim();
@@ -32,44 +31,50 @@ export async function createSuratAction(formData: FormData) {
     throw new Error("Nomor, perihal, dan asal/tujuan wajib diisi.");
   }
 
-  const tahunNomor = tanggalSurat.getFullYear();
+  const tahunNomor = new Date(tanggalSurat).getFullYear();
   let fileMeta: Awaited<ReturnType<typeof storeFile>> | null = null;
   const file = formData.get("file");
   if (file instanceof File && file.size > 0) {
     fileMeta = await storeFile("surat", file);
   }
 
-  const status: SuratStatus =
+  const status =
     jenisSurat === "masuk" && butuhDisposisi ? "menunggu_disposisi" : "tercatat";
 
-  const surat = await prisma.surat.create({
-    data: {
-      jenisSurat,
-      kategoriSuratId,
-      nomorSurat,
-      tahunNomor,
-      tanggalSurat,
-      tanggalTerimaKirim,
-      asalTujuan,
+  const admin = createAdminClient();
+  const { data: surat, error } = await admin
+    .from("surat")
+    .insert({
+      jenis_surat: jenisSurat,
+      kategori_surat_id: kategoriSuratId,
+      nomor_surat: nomorSurat,
+      tahun_nomor: tahunNomor,
+      tanggal_surat: tanggalSurat,
+      tanggal_terima_kirim: tanggalTerimaKirim,
+      asal_tujuan: asalTujuan,
       perihal,
       ringkasan,
-      butuhDisposisi,
+      butuh_disposisi: butuhDisposisi,
       status,
-      createdById: user.id,
-      fileArsipKey: fileMeta?.key,
-      fileArsipMime: fileMeta?.mime,
-      fileArsipSize: fileMeta?.size,
-      fileArsipChecksum: fileMeta?.checksum,
-    },
-  });
+      created_by: user.id,
+      file_arsip_key: fileMeta?.key ?? null,
+      file_arsip_mime: fileMeta?.mime ?? null,
+      file_arsip_size: fileMeta?.size ?? null,
+      file_arsip_checksum: fileMeta?.checksum ?? null,
+    })
+    .select("id")
+    .single();
+
+  if (error || !surat) throw new Error(error?.message ?? "Gagal menyimpan surat.");
 
   if (status === "menunggu_disposisi") {
-    const pimpinan = await prisma.user.findMany({
-      where: { role: "pimpinan", isActive: true },
-      select: { id: true },
-    });
+    const { data: pimpinan } = await admin
+      .from("users")
+      .select("id")
+      .eq("role", "pimpinan")
+      .eq("is_active", true);
     await notifyUsers(
-      pimpinan.map((p) => p.id),
+      (pimpinan ?? []).map((p) => p.id),
       {
         tipe: "surat_menunggu_disposisi",
         judul: "Surat menunggu disposisi",
@@ -81,7 +86,7 @@ export async function createSuratAction(formData: FormData) {
 
   revalidatePath("/surat");
   revalidatePath("/disposisi");
-  return surat.id;
+  return surat.id as string;
 }
 
 export async function createDisposisiAction(formData: FormData) {
@@ -93,40 +98,41 @@ export async function createDisposisiAction(formData: FormData) {
   const catatanDisposisi = String(formData.get("catatanDisposisi") ?? "").trim();
   const tujuanJabatan = String(formData.get("tujuanJabatan") ?? "").trim() || null;
   const batasWaktuRaw = String(formData.get("batasWaktu") ?? "");
-  const batasWaktu = batasWaktuRaw ? new Date(batasWaktuRaw) : null;
+  const batasWaktu = batasWaktuRaw || null;
 
   if (!suratId || !tujuanUserId || !catatanDisposisi) {
     throw new Error("Penerima dan catatan disposisi wajib.");
   }
 
-  const surat = await prisma.surat.findFirst({
-    where: { id: suratId, deletedAt: null },
-  });
-  if (!surat || surat.jenisSurat !== "masuk") {
+  const admin = createAdminClient();
+  const { data: surat } = await admin
+    .from("surat")
+    .select("*")
+    .eq("id", suratId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  const s = surat as SuratRow | null;
+  if (!s || s.jenis_surat !== "masuk") {
     throw new Error("Surat tidak valid untuk disposisi.");
   }
-  if (!["menunggu_disposisi", "didisposisi", "ditindaklanjuti"].includes(surat.status)) {
+  if (!["menunggu_disposisi", "didisposisi", "ditindaklanjuti"].includes(s.status)) {
     throw new Error("Status surat tidak menerima disposisi.");
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.disposisi.create({
-      data: {
-        suratId,
-        dariUserId: user.id,
-        tujuanUserId,
-        tujuanJabatan,
-        catatanDisposisi,
-        batasWaktu,
-        depth: 1,
-        statusTindakLanjut: "belum",
-      },
-    });
-    await tx.surat.update({
-      where: { id: suratId },
-      data: { status: "didisposisi" },
-    });
+  const { error: dErr } = await admin.from("disposisi").insert({
+    surat_id: suratId,
+    dari_user_id: user.id,
+    tujuan_user_id: tujuanUserId,
+    tujuan_jabatan: tujuanJabatan,
+    catatan_disposisi: catatanDisposisi,
+    batas_waktu: batasWaktu,
+    depth: 1,
+    status_tindak_lanjut: "belum",
   });
+  if (dErr) throw new Error(dErr.message);
+
+  await admin.from("surat").update({ status: "didisposisi" }).eq("id", suratId);
 
   await notifyUser({
     userId: tujuanUserId,
@@ -143,51 +149,45 @@ export async function createDisposisiAction(formData: FormData) {
 export async function updateTindakLanjutAction(formData: FormData) {
   const user = await requireUser();
   const disposisiId = String(formData.get("disposisiId") ?? "");
-  const status = String(formData.get("statusTindakLanjut") ?? "") as
-    | "proses"
-    | "selesai";
+  const status = String(formData.get("statusTindakLanjut") ?? "") as "proses" | "selesai";
   const catatan = String(formData.get("catatanTindakLanjut") ?? "").trim() || null;
 
-  const disposisi = await prisma.disposisi.findUnique({ where: { id: disposisiId } });
-  if (!disposisi) throw new Error("Disposisi tidak ditemukan.");
-  if (disposisi.tujuanUserId !== user.id && user.role !== "super_admin") {
+  const admin = createAdminClient();
+  const { data: disposisi } = await admin
+    .from("disposisi")
+    .select("*")
+    .eq("id", disposisiId)
+    .maybeSingle();
+
+  const d = disposisi as DisposisiRow | null;
+  if (!d) throw new Error("Disposisi tidak ditemukan.");
+  if (d.tujuan_user_id !== user.id && user.role !== "super_admin") {
     throw new Error("Hanya penerima disposisi yang dapat memperbarui tindak lanjut.");
   }
 
-  await prisma.disposisi.update({
-    where: { id: disposisiId },
-    data: {
-      statusTindakLanjut: status,
-      catatanTindakLanjut: catatan,
-      selesaiAt: status === "selesai" ? new Date() : null,
-    },
-  });
+  await admin
+    .from("disposisi")
+    .update({
+      status_tindak_lanjut: status,
+      catatan_tindak_lanjut: catatan,
+      selesai_at: status === "selesai" ? new Date().toISOString() : null,
+    })
+    .eq("id", disposisiId);
 
   if (status === "selesai") {
-    const open = await prisma.disposisi.count({
-      where: {
-        suratId: disposisi.suratId,
-        statusTindakLanjut: { in: ["belum", "proses", "diteruskan"] },
-      },
-    });
-    if (open === 0) {
-      await prisma.surat.update({
-        where: { id: disposisi.suratId },
-        data: { status: "selesai" },
-      });
-    } else {
-      await prisma.surat.update({
-        where: { id: disposisi.suratId },
-        data: { status: "ditindaklanjuti" },
-      });
-    }
+    const { count } = await admin
+      .from("disposisi")
+      .select("id", { count: "exact", head: true })
+      .eq("surat_id", d.surat_id)
+      .in("status_tindak_lanjut", ["belum", "proses", "diteruskan"]);
+    await admin
+      .from("surat")
+      .update({ status: count === 0 ? "selesai" : "ditindaklanjuti" })
+      .eq("id", d.surat_id);
   } else {
-    await prisma.surat.update({
-      where: { id: disposisi.suratId },
-      data: { status: "ditindaklanjuti" },
-    });
+    await admin.from("surat").update({ status: "ditindaklanjuti" }).eq("id", d.surat_id);
   }
 
   revalidatePath("/disposisi");
-  revalidatePath(`/surat/${disposisi.suratId}`);
+  revalidatePath(`/surat/${d.surat_id}`);
 }

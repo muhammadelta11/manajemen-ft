@@ -1,54 +1,44 @@
-import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import { DataList, DataListEmpty, DataListRow } from "@/components/data-list";
+import { Badge } from "@/components/ui/badge";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const instant = false;
-
-const COLUMNS = [
-  { key: "nama", label: "Nama" },
-  { key: "role", label: "Role" },
-  { key: "prodi", label: "Prodi" },
-  { key: "status", label: "Status" },
-];
 
 export default async function UsersPage() {
   const user = await requireUser();
   if (user.role !== "super_admin") redirect("/dashboard");
 
-  const users = await prisma.user.findMany({
-    include: { prodi: true },
-    orderBy: { name: "asc" },
-  });
+  const admin = createAdminClient();
+  const { data: users } = await admin
+    .from("users")
+    .select("id, nama, email, role, nidn_nip, is_kaprodi, is_active, prodi:prodi_id(nama_prodi)")
+    .order("nama", { ascending: true });
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Administrasi"
-        title="Pengguna"
-        description="Manajemen akun (seed / lihat daftar MVP)"
-      />
-      <DataList columns={COLUMNS}>
-        {users.map((u) => (
-          <DataListRow key={u.id} columns={4}>
+      <PageHeader eyebrow="Sistem" title="Pengguna" description="Akun yang terhubung ke Supabase Auth" />
+      <ul className="space-y-2">
+        {(users ?? []).map((u) => (
+          <li key={u.id} className="panel flex flex-wrap items-center justify-between gap-2 p-4 text-sm">
             <div>
-              <div className="font-semibold text-[var(--ink)]">{u.name}</div>
-              <div className="text-xs text-[var(--muted)]">{u.email}</div>
+              <p className="font-semibold">{u.nama}</p>
+              <p className="text-[var(--muted)]">
+                {u.email} · {u.nidn_nip}
+                {(u.prodi as { nama_prodi?: string } | null)?.nama_prodi
+                  ? ` · ${(u.prodi as { nama_prodi?: string }).nama_prodi}`
+                  : ""}
+              </p>
             </div>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex gap-2">
               <Badge>{u.role}</Badge>
-              {u.isKaprodi ? (
-                <Badge className="border-amber-200 bg-amber-50 text-amber-900">Kaprodi</Badge>
-              ) : null}
+              {u.is_kaprodi ? <Badge>Kaprodi</Badge> : null}
+              {!u.is_active ? <Badge className="bg-red-50 text-red-700">nonaktif</Badge> : null}
             </div>
-            <div className="text-[var(--muted)]">{u.prodi?.namaProdi ?? "—"}</div>
-            <div>{u.isActive ? "Aktif" : "Nonaktif"}</div>
-          </DataListRow>
+          </li>
         ))}
-        {users.length === 0 ? <DataListEmpty>Belum ada pengguna.</DataListEmpty> : null}
-      </DataList>
+      </ul>
     </div>
   );
 }

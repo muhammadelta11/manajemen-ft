@@ -1,9 +1,7 @@
 "use server";
 
-import { AuthError } from "next-auth";
-import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { redirect } from "next/navigation";
-import { signIn } from "@/auth";
+import { createClient } from "@/lib/supabase/server";
 
 export type LoginState = {
   error?: string;
@@ -20,23 +18,18 @@ export async function loginAction(
     return { error: "Email dan kata sandi wajib diisi." };
   }
 
-  try {
-    await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
-  } catch (error) {
-    // Successful auth may still throw a Next.js redirect in some versions.
-    if (isRedirectError(error)) throw error;
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error instanceof AuthError) {
-      return { error: "Email atau kata sandi salah." };
-    }
-
-    console.error("[loginAction]", error);
-    return { error: "Gagal masuk. Periksa koneksi database lalu coba lagi." };
+  if (error) {
+    return { error: "Email atau kata sandi salah." };
   }
 
   redirect("/dashboard");
+}
+
+export async function logoutAction() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/login");
 }

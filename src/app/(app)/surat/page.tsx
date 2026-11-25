@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { canManageSurat } from "@/lib/rbac";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { DataList, DataListEmpty, DataListRow } from "@/components/data-list";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const instant = false;
 
@@ -24,23 +24,20 @@ export default async function SuratListPage({
   const user = await requireUser();
   const { q } = await searchParams;
   const query = q?.trim();
+  const admin = createAdminClient();
 
-  const surat = await prisma.surat.findMany({
-    where: {
-      deletedAt: null,
-      ...(query
-        ? {
-            OR: [
-              { nomorSurat: { contains: query, mode: "insensitive" } },
-              { perihal: { contains: query, mode: "insensitive" } },
-              { asalTujuan: { contains: query, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
+  let req = admin
+    .from("surat")
+    .select("id, nomor_surat, perihal, tanggal_surat, status")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (query) {
+    req = req.or(`nomor_surat.ilike.%${query}%,perihal.ilike.%${query}%,asal_tujuan.ilike.%${query}%`);
+  }
+
+  const { data: surat } = await req;
 
   return (
     <div className="space-y-6">
@@ -52,7 +49,7 @@ export default async function SuratListPage({
           canManageSurat(user.role) ? (
             <Link
               href="/surat/baru"
-              className="inline-flex h-11 items-center rounded-xl bg-[var(--brand-deep)] px-5 text-sm font-semibold text-white shadow-[0_10px_24px_-12px_rgba(13,74,60,0.7)] transition hover:bg-[var(--brand)]"
+              className="inline-flex h-11 items-center rounded-xl bg-[var(--brand-deep)] px-5 text-sm font-semibold text-white"
             >
               Catat surat
             </Link>
@@ -60,44 +57,29 @@ export default async function SuratListPage({
         }
       />
 
-      <form className="animate-fade-up-delay-1 panel flex gap-2 p-2">
+      <form className="panel flex gap-2 p-2">
         <input
           name="q"
           defaultValue={query}
           placeholder="Cari nomor, perihal, asal/tujuan…"
-          className="h-11 flex-1 rounded-xl border-0 bg-transparent px-3 text-sm outline-none placeholder:text-[var(--muted)]"
+          className="h-11 flex-1 rounded-xl border-0 bg-transparent px-3 text-sm outline-none"
         />
-        <button
-          type="submit"
-          className="h-11 rounded-xl bg-[var(--mist)] px-4 text-sm font-semibold text-[var(--ink)] transition hover:bg-[#e3ebe8]"
-        >
+        <button type="submit" className="h-11 rounded-xl bg-[var(--mist)] px-4 text-sm font-semibold">
           Cari
         </button>
       </form>
 
-      <div className="animate-fade-up-delay-2">
-        <DataList columns={COLUMNS}>
-          {surat.map((s) => (
-            <DataListRow key={s.id} columns={4}>
-              <div>
-                <Link
-                  href={`/surat/${s.id}`}
-                  className="font-semibold text-[var(--brand-deep)] hover:underline"
-                >
-                  {s.nomorSurat}
-                </Link>
-                <div className="mt-0.5 text-xs text-[var(--muted)]">{s.jenisSurat}</div>
-              </div>
-              <div className="text-[var(--ink)]">{s.perihal}</div>
-              <div className="text-[var(--muted)]">{formatDate(s.tanggalSurat)}</div>
-              <div>
-                <Badge>{s.status}</Badge>
-              </div>
-            </DataListRow>
-          ))}
-          {surat.length === 0 ? <DataListEmpty>Belum ada surat.</DataListEmpty> : null}
-        </DataList>
-      </div>
+      <DataList columns={COLUMNS}>
+        {(surat ?? []).map((s) => (
+          <DataListRow key={s.id} columns={4} href={`/surat/${s.id}`}>
+            <span>{s.nomor_surat}</span>
+            <span>{s.perihal}</span>
+            <span>{formatDate(s.tanggal_surat)}</span>
+            <Badge>{s.status}</Badge>
+          </DataListRow>
+        ))}
+        {(surat ?? []).length === 0 ? <DataListEmpty>Belum ada surat.</DataListEmpty> : null}
+      </DataList>
     </div>
   );
 }

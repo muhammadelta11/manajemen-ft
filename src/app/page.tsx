@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { getOptionalUser } from "@/lib/session";
 
 export const instant = false;
 
 export default async function HomePage() {
-  const session = await auth();
-  redirect(session?.user ? "/dashboard" : "/login");
+  const user = await getOptionalUser();
+  redirect(user ? "/dashboard" : "/login");
 }

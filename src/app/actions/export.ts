@@ -1,9 +1,9 @@
 "use server";
 
 import * as XLSX from "xlsx";
-import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { canManageSurat, canViewKepegawaian } from "@/lib/rbac";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function exportAgendaExcelAction(from: string, to: string) {
   const user = await requireUser();
@@ -11,22 +11,20 @@ export async function exportAgendaExcelAction(from: string, to: string) {
     throw new Error("Tidak diizinkan.");
   }
 
-  const rows = await prisma.surat.findMany({
-    where: {
-      deletedAt: null,
-      tanggalSurat: {
-        gte: new Date(from),
-        lte: new Date(to),
-      },
-    },
-    orderBy: { tanggalSurat: "asc" },
-  });
+  const admin = createAdminClient();
+  const { data: rows } = await admin
+    .from("surat")
+    .select("*")
+    .is("deleted_at", null)
+    .gte("tanggal_surat", from)
+    .lte("tanggal_surat", to)
+    .order("tanggal_surat", { ascending: true });
 
-  const data = rows.map((s) => ({
-    Jenis: s.jenisSurat,
-    Nomor: s.nomorSurat,
-    Tanggal: s.tanggalSurat.toISOString().slice(0, 10),
-    "Asal/Tujuan": s.asalTujuan,
+  const data = (rows ?? []).map((s) => ({
+    Jenis: s.jenis_surat,
+    Nomor: s.nomor_surat,
+    Tanggal: String(s.tanggal_surat).slice(0, 10),
+    "Asal/Tujuan": s.asal_tujuan,
     Perihal: s.perihal,
     Status: s.status,
   }));
@@ -46,31 +44,29 @@ export async function exportAktivitasExcelAction(from: string, to: string) {
   const user = await requireUser();
   if (!canViewKepegawaian(user.role)) throw new Error("Tidak diizinkan.");
 
-  const where =
-    user.role === "pegawai"
-      ? { userId: user.id, deletedAt: null as Date | null }
-      : { deletedAt: null as Date | null };
+  const admin = createAdminClient();
+  let query = admin
+    .from("aktivitas_pegawai")
+    .select("*, users:user_id(nama), prodi:prodi_id(nama_prodi)")
+    .is("deleted_at", null)
+    .gte("tanggal_kegiatan", from)
+    .lte("tanggal_kegiatan", to)
+    .order("tanggal_kegiatan", { ascending: true });
 
-  const rows = await prisma.aktivitasPegawai.findMany({
-    where: {
-      ...where,
-      tanggalKegiatan: {
-        gte: new Date(from),
-        lte: new Date(to),
-      },
-    },
-    include: { user: true, prodi: true },
-    orderBy: { tanggalKegiatan: "asc" },
-  });
+  if (user.role === "pegawai") {
+    query = query.eq("user_id", user.id);
+  }
 
-  const data = rows.map((a) => ({
-    Pegawai: a.user.name,
-    Prodi: a.prodi.namaProdi,
+  const { data: rows } = await query;
+
+  const data = (rows ?? []).map((a) => ({
+    Pegawai: (a.users as { nama?: string } | null)?.nama ?? "",
+    Prodi: (a.prodi as { nama_prodi?: string } | null)?.nama_prodi ?? "",
     Kategori: a.kategori,
-    Judul: a.judulKegiatan,
-    Tanggal: a.tanggalKegiatan.toISOString().slice(0, 10),
+    Judul: a.judul_kegiatan,
+    Tanggal: String(a.tanggal_kegiatan).slice(0, 10),
     Peran: a.peran,
-    Status: a.statusValidasi,
+    Status: a.status_validasi,
   }));
 
   const wb = XLSX.utils.book_new();

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { logoutAction } from "@/app/actions/auth";
 import {
   LayoutDashboard,
   Bell,
@@ -448,14 +448,11 @@ export default function ManajemenFTDashboard({
               <strong>{user.name}</strong>
               <span>{roleLabel(user.role, user.isKaprodi)}</span>
             </div>
-            <button
-              aria-label="Keluar"
-              className="mft-logout"
-              type="button"
-              onClick={() => signOut({ callbackUrl: "/login" })}
-            >
-              <LogOut size={17} />
-            </button>
+            <form action={logoutAction}>
+              <button aria-label="Keluar" className="mft-logout" type="submit">
+                <LogOut size={17} />
+              </button>
+            </form>
           </div>
         </div>
       </aside>

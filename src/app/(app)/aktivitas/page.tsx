@@ -1,53 +1,48 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { DataList, DataListEmpty, DataListRow } from "@/components/data-list";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const instant = false;
 
 const COLUMNS = [
-  { key: "judul", label: "Judul" },
-  { key: "pegawai", label: "Pegawai" },
+  { key: "judul", label: "Kegiatan" },
   { key: "kategori", label: "Kategori" },
+  { key: "tanggal", label: "Tanggal" },
   { key: "status", label: "Status" },
 ];
 
 export default async function AktivitasPage() {
   const user = await requireUser();
+  const admin = createAdminClient();
 
-  const where =
-    user.role === "pegawai"
-      ? { userId: user.id, deletedAt: null }
-      : { deletedAt: null };
+  let query = admin
+    .from("aktivitas_pegawai")
+    .select("id, judul_kegiatan, kategori, tanggal_kegiatan, status_validasi, user_id")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(50);
 
-  const rows = await prisma.aktivitasPegawai.findMany({
-    where,
-    include: {
-      user: { select: { name: true } },
-      prodi: { select: { namaProdi: true } },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
+  if (user.role === "pegawai") {
+    query = query.eq("user_id", user.id);
+  }
+
+  const { data: rows } = await query;
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Kepegawaian"
-        title="Aktivitas Tridarma"
-        description={
-          user.role === "pimpinan"
-            ? "Tampilan view-only untuk pimpinan"
-            : "Pengajaran, penelitian, dan pengabdian"
-        }
+        title="Aktivitas"
+        description="Catatan Tridarma pegawai"
         actions={
           user.role === "pegawai" ? (
             <Link
               href="/aktivitas/baru"
-              className="inline-flex h-11 items-center rounded-xl bg-[var(--brand-deep)] px-5 text-sm font-semibold text-white shadow-[0_10px_24px_-12px_rgba(13,74,60,0.7)] transition hover:bg-[var(--brand)]"
+              className="inline-flex h-11 items-center rounded-xl bg-[var(--brand-deep)] px-5 text-sm font-semibold text-white"
             >
               Input aktivitas
             </Link>
@@ -55,34 +50,17 @@ export default async function AktivitasPage() {
         }
       />
 
-      <div className="animate-fade-up-delay-1">
-        <DataList columns={COLUMNS}>
-          {rows.map((a) => (
-            <DataListRow key={a.id} columns={4}>
-              <div>
-                <Link
-                  href={`/aktivitas/${a.id}`}
-                  className="font-semibold text-[var(--brand-deep)] hover:underline"
-                >
-                  {a.judulKegiatan}
-                </Link>
-                <div className="mt-0.5 text-xs text-[var(--muted)]">
-                  {formatDate(a.tanggalKegiatan)}
-                </div>
-              </div>
-              <div>
-                <div className="text-[var(--ink)]">{a.user.name}</div>
-                <div className="text-xs text-[var(--muted)]">{a.prodi.namaProdi}</div>
-              </div>
-              <div className="text-[var(--muted)]">{a.kategori}</div>
-              <div>
-                <Badge>{a.statusValidasi}</Badge>
-              </div>
-            </DataListRow>
-          ))}
-          {rows.length === 0 ? <DataListEmpty>Belum ada aktivitas.</DataListEmpty> : null}
-        </DataList>
-      </div>
+      <DataList columns={COLUMNS}>
+        {(rows ?? []).map((a) => (
+          <DataListRow key={a.id} columns={4} href={`/aktivitas/${a.id}`}>
+            <span>{a.judul_kegiatan}</span>
+            <span>{a.kategori}</span>
+            <span>{formatDate(a.tanggal_kegiatan)}</span>
+            <Badge>{a.status_validasi}</Badge>
+          </DataListRow>
+        ))}
+        {(rows ?? []).length === 0 ? <DataListEmpty>Belum ada aktivitas.</DataListEmpty> : null}
+      </DataList>
     </div>
   );
 }

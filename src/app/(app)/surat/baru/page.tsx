@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { createSuratAction } from "@/app/actions/surat";
-import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { canManageSurat } from "@/lib/rbac";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,10 +14,12 @@ export default async function SuratBaruPage() {
   const user = await requireUser();
   if (!canManageSurat(user.role)) redirect("/dashboard");
 
-  const kategori = await prisma.kategoriSurat.findMany({
-    where: { isActive: true },
-    orderBy: { nama: "asc" },
-  });
+  const admin = createAdminClient();
+  const { data: kategori } = await admin
+    .from("kategori_surat")
+    .select("id, nama")
+    .eq("is_active", true)
+    .order("nama", { ascending: true });
 
   async function action(formData: FormData) {
     "use server";
@@ -54,7 +56,7 @@ export default async function SuratBaruPage() {
               className="h-10 w-full rounded-md border border-stone-300 bg-white px-3 text-sm"
             >
               <option value="">—</option>
-              {kategori.map((k) => (
+              {(kategori ?? []).map((k) => (
                 <option key={k.id} value={k.id}>
                   {k.nama}
                 </option>
