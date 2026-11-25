@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #0b1f2a;
+  --ink-soft: #123040;
+  --sidebar: #0a1922;
+  --mist: #eef3f6;
+  --surface: #f4f7fa;
+  --surface-elevated: #ffffff;
+  --line: rgba(11, 31, 42, 0.08);
+  --line-strong: rgba(11, 31, 42, 0.14);
+  --foreground: #14212b;
+  --muted: #64748b;
+  --brand: #0d9488;
+  --brand-deep: #0f766e;
+  --brand-glow: rgba(13, 148, 136, 0.18);
+  --brass: #c9a227;
+  --danger: #ef4444;
+  --radius-panel: 1.25rem;
+  --shadow-soft: 0 1px 0 rgba(11, 31, 42, 0.04), 0 16px 36px -24px rgba(11, 31, 42, 0.28);
+  --shadow-lift: 0 1px 0 rgba(11, 31, 42, 0.05), 0 22px 44px -22px rgba(11, 31, 42, 0.35);
+}
+
+@theme inline {
+  --color-background: var(--surface);
+  --color-foreground: var(--foreground);
+  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background: var(--surface);
+  color: var(--foreground);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: inherit;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.app-shell-bg {
+  background: linear-gradient(180deg, #f7fafc 0%, #eef3f6 100%);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-fade-up-delay-1 {
+  animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.06s both;
+}
+
+.animate-fade-up-delay-2 {
+  animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  background: var(--surface-elevated);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-soft);
+}
+
+.panel-interactive {
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.panel-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+.wave-deco {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 120'%3E%3Cpath fill='%230d9488' fill-opacity='0.08' d='M0,64L48,69.3C96,75,192,85,288,80C384,75,480,53,576,48C672,43,768,53,864,69.3C960,85,1056,107,1152,106.7C1248,107,1344,85,1392,74.7L1440,64L1440,120L1392,120C1344,120,1248,120,1152,120C1056,120,960,120,864,120C768,120,672,120,576,120C480,120,384,120,288,120C192,120,96,120,48,120L0,120Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: bottom;
+  background-size: cover;
+}
+
+select {
+  height: 2.75rem;
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  padding: 0 0.875rem;
+  font-size: 0.875rem;
+}
+
+select:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--line-strong));
+  box-shadow: 0 0 0 4px var(--brand-glow);
+}
