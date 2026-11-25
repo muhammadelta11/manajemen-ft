@@ -8,9 +8,8 @@ import { requireUser } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SessionUser } from "@/lib/rbac";
 
-export const instant = false;
-
 export default async function DashboardPage() {
+  // requireUser di-cache bersama layout — tidak dobel round-trip
   const user = await requireUser();
   const data = await buildDashboard(user);
   return (
@@ -37,18 +36,19 @@ function relativeTime(iso: string) {
 async function buildDashboard(user: SessionUser) {
   const admin = createAdminClient();
 
-  const { count: notifUnread } = await admin
-    .from("notifications")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .is("read_at", null);
-
-  const { data: recent } = await admin
-    .from("notifications")
-    .select("judul, pesan, created_at")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(3);
+  const [{ count: notifUnread }, { data: recent }] = await Promise.all([
+    admin
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .is("read_at", null),
+    admin
+      .from("notifications")
+      .select("judul, pesan, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(3),
+  ]);
 
   const tones: MftActivity["tone"][] = ["green", "blue", "gray"];
   const activities: MftActivity[] =

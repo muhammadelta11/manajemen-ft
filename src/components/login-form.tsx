@@ -1,26 +1,52 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
-import { loginAction, type LoginState } from "@/app/actions/auth";
+import { useEffect, useState, useTransition } from "react";
+import { finalizeLoginAction } from "@/app/actions/auth";
+import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const initial: LoginState = {};
-
 export function LoginForm() {
-  const [state, action, pending] = useActionState(loginAction, initial);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
-  // Fill demo credentials after mount so password managers can't mutate SSR HTML.
   useEffect(() => {
     setEmail("arsip@fakultas.ac.id");
     setPassword("Password123!");
   }, []);
 
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    startTransition(async () => {
+      const supabase = createBrowserSupabase();
+      if (!supabase) {
+        setError("Konfigurasi Supabase belum siap. Cek .env.local / Vercel env.");
+        return;
+      }
+
+      const { error: signError } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      if (signError) {
+        setError("Email atau kata sandi salah.");
+        return;
+      }
+
+      // Cookie sesi sudah di browser; finalize set profil + redirect server-side
+      const result = await finalizeLoginAction();
+      if (result?.error) setError(result.error);
+    });
+  }
+
   return (
-    <form action={action} className="mt-7 space-y-4">
+    <form onSubmit={onSubmit} className="mt-7 space-y-4">
       <div className="space-y-1.5">
         <Label htmlFor="email">Email</Label>
         <Input
@@ -47,9 +73,9 @@ export function LoginForm() {
         />
       </div>
 
-      {state.error ? (
+      {error ? (
         <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {state.error}
+          {error}
         </p>
       ) : null}
 

@@ -1,9 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { SUPABASE_KEY, SUPABASE_URL, supabaseReady } from "@/lib/supabase/env";
-import { canAccessPath, type SessionUser } from "@/lib/rbac";
-import type { AppRole } from "@/lib/roles";
-import { createClient as createAdmin } from "@supabase/supabase-js";
+import { canAccessPath } from "@/lib/rbac";
+import { decodeProfile, PROFILE_COOKIE } from "@/lib/profile-cookie";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -18,9 +17,6 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!supabaseReady) {
-    if (pathname !== "/login" && !pathname.startsWith("/api")) {
-      // Tanpa env Supabase, arahkan ke login agar jelas
-    }
     return NextResponse.next();
   }
 
@@ -37,10 +33,11 @@ export async function proxy(request: NextRequest) {
     },
   });
 
+  // getSession = baca JWT lokal (tanpa round-trip Auth API) — jauh lebih cepat di edge
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const isLoggedIn = !!user;
+    data: { session },
+  } = await supabase.auth.getSession();
+  const isLoggedIn = !!session?.user;
 
   if (pathname.startsWith("/api/notifications/stream")) {
     if (!isLoggedIn) return new NextResponse("Unauthorized", { status: 401 });
@@ -62,34 +59,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(login);
   }
 
-  // Profil untuk RBAC path
-  const serviceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    process.env.SUPABASE_SECRET_KEY?.trim() ||
-    "";
-  if (serviceKey) {
-    const admin = createAdmin(SUPABASE_URL, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-    const { data: profile } = await admin
-      .from("users")
-      .select("id, nama, email, role, is_kaprodi, prodi_id")
-      .eq("id", user!.id)
-      .maybeSingle();
-
-    if (profile) {
-      const sessionUser: SessionUser = {
-        id: profile.id,
-        name: profile.nama,
-        email: profile.email,
-        role: profile.role as AppRole,
-        isKaprodi: Boolean(profile.is_kaprodi),
-        prodiId: profile.prodi_id ?? null,
-      };
-      if (!canAccessPath(sessionUser, pathname)) {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
-      }
-    }
+  const profile = decodeProfile(request.cookies.get(PROFILE_COOKIE)?.value);
+  if (profile && profile.id === session!.user.id && !canAccessPath(profile, pathname)) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return response;

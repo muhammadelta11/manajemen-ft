@@ -1,7 +1,5 @@
 import { LoginForm } from "@/components/login-form";
 
-export const instant = false;
-
 export default function LoginPage() {
   return (
     <div className="relative flex min-h-screen overflow-hidden">
