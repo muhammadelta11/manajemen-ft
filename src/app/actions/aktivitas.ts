@@ -5,8 +5,41 @@ import { requireUser } from "@/lib/session";
 import { canManageAktivitasOwn, canValidateAktivitas } from "@/lib/rbac";
 import { storeFile } from "@/lib/storage";
 import { notifyUser, notifyUsers } from "@/lib/notifications";
+import { kaprodiIdsForProdi, uniqueIds, userIdsByRoles } from "@/lib/notify-targets";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { AktivitasRow } from "@/lib/types";
+
+async function notifyAktivitasDiajukan(opts: {
+  aktivitasId: string;
+  prodiId: string;
+  judul: string;
+  pegawaiId: string;
+}) {
+  const kaprodi = await kaprodiIdsForProdi(opts.prodiId, opts.pegawaiId);
+  const kepegawaian = await userIdsByRoles(
+    ["admin_kepegawaian", "super_admin", "pimpinan"],
+    opts.pegawaiId,
+  );
+  const targets = uniqueIds(kaprodi, kepegawaian);
+
+  await Promise.all([
+    notifyUsers(kaprodi, {
+      tipe: "aktivitas_menunggu",
+      judul: "Aktivitas menunggu validasi Kaprodi",
+      pesan: opts.judul,
+      linkPath: "/validasi",
+    }),
+    notifyUsers(
+      targets.filter((id) => !kaprodi.includes(id)),
+      {
+        tipe: "aktivitas_diajukan",
+        judul: "Pengajuan aktivitas Tridarma",
+        pesan: opts.judul,
+        linkPath: `/aktivitas/${opts.aktivitasId}`,
+      },
+    ),
+  ]);
+}
 
 export async function createAktivitasAction(formData: FormData) {
   const user = await requireUser();
@@ -56,31 +89,20 @@ export async function createAktivitasAction(formData: FormData) {
   if (error || !aktivitas) throw new Error(error?.message ?? "Gagal menyimpan.");
 
   if (ajukan) {
-    const [{ data: kaprodi }] = await Promise.all([
-      admin
-        .from("users")
-        .select("id")
-        .eq("is_kaprodi", true)
-        .eq("prodi_id", user.prodiId)
-        .eq("is_active", true),
-      admin.from("aktivitas_validasi_log").insert({
-        aktivitas_id: aktivitas.id,
-        dari_status: "draft",
-        ke_status: "menunggu",
-        validator_id: user.id,
-        catatan: "Diajukan oleh pegawai",
-      }),
-    ]);
+    await admin.from("aktivitas_validasi_log").insert({
+      aktivitas_id: aktivitas.id,
+      dari_status: "draft",
+      ke_status: "menunggu",
+      validator_id: user.id,
+      catatan: "Diajukan oleh pegawai",
+    });
 
-    await notifyUsers(
-      (kaprodi ?? []).map((k) => k.id),
-      {
-        tipe: "aktivitas_menunggu",
-        judul: "Aktivitas menunggu validasi",
-        pesan: judulKegiatan,
-        linkPath: "/validasi",
-      },
-    );
+    await notifyAktivitasDiajukan({
+      aktivitasId: aktivitas.id,
+      prodiId: user.prodiId,
+      judul: judulKegiatan,
+      pegawaiId: user.id,
+    });
   }
 
   revalidatePath("/aktivitas");
@@ -120,6 +142,13 @@ export async function ajukanAktivitasAction(formData: FormData) {
       catatan: "Diajukan ulang",
     }),
   ]);
+
+  await notifyAktivitasDiajukan({
+    aktivitasId: id,
+    prodiId: a.prodi_id,
+    judul: a.judul_kegiatan,
+    pegawaiId: user.id,
+  });
 
   revalidatePath("/aktivitas");
   revalidatePath("/validasi");
@@ -169,6 +198,7 @@ export async function validateAktivitasAction(formData: FormData) {
       validator_id: user.id,
       catatan: catatan || null,
     }),
+    // Pemilik aktivitas (user spesifik)
     notifyUser({
       userId: a.user_id,
       tipe: "validasi_hasil",
@@ -177,6 +207,22 @@ export async function validateAktivitasAction(formData: FormData) {
       linkPath: `/aktivitas/${id}`,
     }),
   ]);
+
+  if (keputusan === "disetujui") {
+    const pantau = await userIdsByRoles(
+      ["admin_kepegawaian", "super_admin", "pimpinan"],
+      user.id,
+    );
+    await notifyUsers(
+      pantau.filter((id) => id !== a.user_id),
+      {
+        tipe: "aktivitas_disetujui",
+        judul: "Aktivitas Tridarma disetujui",
+        pesan: a.judul_kegiatan,
+        linkPath: `/aktivitas/${id}`,
+      },
+    );
+  }
 
   revalidatePath("/validasi");
   revalidatePath("/aktivitas");

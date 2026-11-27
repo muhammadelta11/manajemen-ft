@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/session";
 import { canCreateDisposisi, canManageSurat } from "@/lib/rbac";
 import { storeFile } from "@/lib/storage";
 import { notifyUser, notifyUsers } from "@/lib/notifications";
+import { uniqueIds, userIdsByRoles } from "@/lib/notify-targets";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { DisposisiRow, SuratRow } from "@/lib/types";
 
@@ -67,21 +68,28 @@ export async function createSuratAction(formData: FormData) {
 
   if (error || !surat) throw new Error(error?.message ?? "Gagal menyimpan surat.");
 
+  const ringkas = `${nomorSurat} — ${perihal}`;
+
   if (status === "menunggu_disposisi") {
-    const { data: pimpinan } = await admin
-      .from("users")
-      .select("id")
-      .eq("role", "pimpinan")
-      .eq("is_active", true);
-    await notifyUsers(
-      (pimpinan ?? []).map((p) => p.id),
-      {
-        tipe: "surat_menunggu_disposisi",
-        judul: "Surat menunggu disposisi",
-        pesan: `${nomorSurat} — ${perihal}`,
+    // Pimpinan: antrean disposisi; Super Admin: pantauan fakultas
+    const targets = await userIdsByRoles(["pimpinan", "super_admin"], user.id);
+    await notifyUsers(targets, {
+      tipe: "surat_menunggu_disposisi",
+      judul: "Surat menunggu disposisi",
+      pesan: ringkas,
+      linkPath: `/surat/${surat.id}`,
+    });
+  } else {
+    // Surat tercatat (keluar / tanpa disposisi) → pantauan arsip & super admin lain
+    const targets = await userIdsByRoles(["admin_arsip", "super_admin"], user.id);
+    if (targets.length) {
+      await notifyUsers(targets, {
+        tipe: "surat_tercatat",
+        judul: jenisSurat === "keluar" ? "Surat keluar tercatat" : "Surat tercatat",
+        pesan: ringkas,
         linkPath: `/surat/${surat.id}`,
-      },
-    );
+      });
+    }
   }
 
   revalidatePath("/surat");
@@ -132,15 +140,29 @@ export async function createDisposisiAction(formData: FormData) {
   });
   if (dErr) throw new Error(dErr.message);
 
+  const arsipIds = await userIdsByRoles(["admin_arsip", "super_admin"], user.id);
+  const pantau = uniqueIds([tujuanUserId], arsipIds).filter((id) => id !== user.id);
+
   await Promise.all([
     admin.from("surat").update({ status: "didisposisi" }).eq("id", suratId),
+    // Penerima (user spesifik)
     notifyUser({
       userId: tujuanUserId,
       tipe: "disposisi_baru",
-      judul: "Disposisi baru",
-      pesan: catatanDisposisi.slice(0, 200),
+      judul: "Disposisi baru untuk Anda",
+      pesan: `${s.nomor_surat}: ${catatanDisposisi.slice(0, 160)}`,
       linkPath: `/disposisi`,
     }),
+    // Admin Arsip / Super Admin pantau
+    notifyUsers(
+      pantau.filter((id) => id !== tujuanUserId),
+      {
+        tipe: "disposisi_dibuat",
+        judul: "Disposisi dikirim pimpinan",
+        pesan: `${s.nomor_surat} — ${s.perihal}`,
+        linkPath: `/surat/${suratId}`,
+      },
+    ),
   ]);
 
   revalidatePath(`/surat/${suratId}`);
@@ -175,19 +197,55 @@ export async function updateTindakLanjutAction(formData: FormData) {
     })
     .eq("id", disposisiId);
 
+  let suratStatus: string = "ditindaklanjuti";
   if (status === "selesai") {
     const { count } = await admin
       .from("disposisi")
       .select("id", { count: "exact", head: true })
       .eq("surat_id", d.surat_id)
       .in("status_tindak_lanjut", ["belum", "proses", "diteruskan"]);
-    await admin
-      .from("surat")
-      .update({ status: count === 0 ? "selesai" : "ditindaklanjuti" })
-      .eq("id", d.surat_id);
+    suratStatus = count === 0 ? "selesai" : "ditindaklanjuti";
+    await admin.from("surat").update({ status: suratStatus }).eq("id", d.surat_id);
   } else {
     await admin.from("surat").update({ status: "ditindaklanjuti" }).eq("id", d.surat_id);
   }
+
+  const { data: surat } = await admin
+    .from("surat")
+    .select("nomor_surat, perihal, created_by")
+    .eq("id", d.surat_id)
+    .maybeSingle();
+
+  const label = surat
+    ? `${surat.nomor_surat} — ${surat.perihal}`
+    : "Disposisi surat";
+
+  // Pimpinan pengirim (user spesifik)
+  if (d.dari_user_id && d.dari_user_id !== user.id) {
+    await notifyUser({
+      userId: d.dari_user_id,
+      tipe: status === "selesai" ? "disposisi_selesai" : "disposisi_proses",
+      judul: status === "selesai" ? "Disposisi diselesaikan" : "Disposisi diproses",
+      pesan: label,
+      linkPath: `/surat/${d.surat_id}`,
+    });
+  }
+
+  // Admin Arsip + Super Admin pantau progres (hindari dobel ke pimpinan pengirim)
+  const pantau = (await userIdsByRoles(["admin_arsip", "super_admin"], user.id)).filter(
+    (id) => id !== d.dari_user_id,
+  );
+  await notifyUsers(pantau, {
+    tipe: status === "selesai" ? "disposisi_selesai" : "disposisi_proses",
+    judul:
+      suratStatus === "selesai"
+        ? "Surat disposisi selesai"
+        : status === "selesai"
+          ? "Cabang disposisi selesai"
+          : "Update tindak lanjut disposisi",
+    pesan: label,
+    linkPath: `/surat/${d.surat_id}`,
+  });
 
   revalidatePath("/disposisi");
   revalidatePath(`/surat/${d.surat_id}`);
