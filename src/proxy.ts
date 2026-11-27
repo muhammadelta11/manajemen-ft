@@ -45,10 +45,12 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname === "/login") {
+    // Hanya auto-redirect jika cookie profil valid — cegah loop login⇄app
     if (isLoggedIn) {
       const profile = await decodeProfile(request.cookies.get(PROFILE_COOKIE)?.value);
-      const dest = profile ? homeHint(profile.role) : "/dashboard";
-      return NextResponse.redirect(new URL(dest, request.url));
+      if (profile && profile.id === session!.user.id) {
+        return NextResponse.redirect(new URL(homeHint(profile.role), request.url));
+      }
     }
     return response;
   }

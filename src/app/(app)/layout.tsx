@@ -1,17 +1,15 @@
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { AppShell } from "@/components/app-shell";
-import { getUserFromCookie } from "@/lib/session";
+import { getUserFromCookie, requireUser } from "@/lib/session";
 
 export const instant = false;
 
 /**
- * Shell hanya dari cookie profil (tanpa query notifikasi/DB).
- * Badge unread diisi SSE di client → navigasi menu tidak menunggu server.
+ * Prefer cookie (cepat). Jika cookie hilang/lama tapi sesi masih valid,
+ * requireUser mengisi ulang cookie — hindari blank/redirect loop.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await getUserFromCookie();
-  if (!user) redirect("/login");
+  const user = (await getUserFromCookie()) ?? (await requireUser());
 
   return (
     <AppShell

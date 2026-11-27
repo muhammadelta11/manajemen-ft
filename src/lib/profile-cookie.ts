@@ -91,7 +91,11 @@ export async function encodeProfile(user: SessionUser): Promise<string> {
 export async function decodeProfile(raw: string | undefined): Promise<SessionUser | null> {
   if (!raw) return null;
   try {
-    const [body, sig] = raw.split(".");
+    const dot = raw.lastIndexOf(".");
+    // Format baru: body.sig — format lama (tanpa sig) dianggap invalid
+    if (dot <= 0) return null;
+    const body = raw.slice(0, dot);
+    const sig = raw.slice(dot + 1);
     if (!body || !sig) return null;
     if (!(await hmacVerify(body, sig))) return null;
     return parseUser(JSON.parse(fromBase64Url(body)) as SessionUser);

@@ -35,12 +35,19 @@ export const requireUser = cache(async (): Promise<SessionUser> => {
     return cached;
   }
 
-  if (!session?.user) redirect("/login");
+  let userId = session?.user?.id;
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    userId = user?.id;
+  }
+  if (!userId) redirect("/login");
 
   const { data: profile, error } = await supabase
     .from("users")
     .select("id, nama, email, role, is_kaprodi, prodi_id, is_active")
-    .eq("id", session.user.id)
+    .eq("id", userId)
     .maybeSingle();
 
   if (error || !profile || !(profile as UserRow).is_active) {
