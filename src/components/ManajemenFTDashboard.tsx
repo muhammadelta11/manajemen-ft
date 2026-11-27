@@ -116,7 +116,8 @@ function navFor(role: AppRole, isKaprodi: boolean) {
       { label: "Disposisi", href: "/disposisi", icon: Send },
       { label: "Aktivitas", href: "/aktivitas", icon: BookOpen },
       { label: "Pengguna", href: "/users", icon: Users },
-      { label: "Pengaturan", href: "/master", icon: Settings },
+      { label: "Master", href: "/master", icon: Settings },
+      { label: "Akun", href: "/profil", icon: UserRound },
     ];
   }
   if (role === "admin_kepegawaian") {

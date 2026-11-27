@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/session";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
+import { PushEnableCard } from "@/components/push-enable";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -29,8 +30,17 @@ export default async function NotifikasiPage() {
       <PageHeader
         eyebrow="Sistem"
         title="Notifikasi"
-        description="Pemberitahuan in-app dengan pembaruan real-time (SSE)"
+        description="Pemberitahuan in-app dan pengaturan web push"
       />
+
+      <section className="panel max-w-2xl space-y-3 p-5">
+        <h2 className="text-base font-semibold text-[var(--ink)]">Notifikasi web push</h2>
+        <p className="text-sm text-[var(--muted)]">
+          Aktifkan agar alert muncul di perangkat (Chrome/Edge · HTTPS). Juga tersedia di menu Akun /
+          Pengaturan → Profil.
+        </p>
+        <PushEnableCard />
+      </section>
 
       <ul className="space-y-2.5">
         {(items ?? []).map((n) => (

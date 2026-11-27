@@ -18,14 +18,17 @@ function urlBase64ToUint8Array(base64String: string) {
   return out;
 }
 
-export function PushEnableCard() {
-  const [supported, setSupported] = useState(false);
+export function PushEnableCard({ compact = false }: { compact?: boolean }) {
+  const [supported, setSupported] = useState(true);
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [subscribed, setSubscribed] = useState(false);
   const [configured, setConfigured] = useState(false);
-  const [publicKey, setPublicKey] = useState("");
+  const [publicKey, setPublicKey] = useState(
+    () => process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() || "",
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const ok =
@@ -34,12 +37,14 @@ export function PushEnableCard() {
       "serviceWorker" in navigator &&
       "PushManager" in window;
     setSupported(ok);
+    setReady(true);
     if (!ok) return;
+
     setPermission(Notification.permission);
 
     void getPushPublicKeyAction().then((r) => {
       setConfigured(r.configured);
-      setPublicKey(r.publicKey);
+      if (r.publicKey) setPublicKey(r.publicKey);
     });
 
     void navigator.serviceWorker.ready
@@ -51,8 +56,11 @@ export function PushEnableCard() {
   function enable() {
     setMessage(null);
     start(async () => {
-      if (!configured || !publicKey) {
-        setMessage("Web Push belum dikonfigurasi (VAPID key).");
+      const key = publicKey || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() || "";
+      if (!key) {
+        setMessage(
+          "VAPID public key belum di-set. Tambahkan NEXT_PUBLIC_VAPID_PUBLIC_KEY di Vercel/.env.local lalu redeploy.",
+        );
         return;
       }
       if (!window.isSecureContext && location.hostname !== "localhost") {
@@ -60,10 +68,16 @@ export function PushEnableCard() {
         return;
       }
 
+      try {
+        await navigator.serviceWorker.register("/sw.js");
+      } catch {
+        /* sudah terdaftar */
+      }
+
       const perm = await Notification.requestPermission();
       setPermission(perm);
       if (perm !== "granted") {
-        setMessage("Izin notifikasi ditolak di browser.");
+        setMessage("Izin notifikasi ditolak di browser. Cek ikon gembok di address bar.");
         return;
       }
 
@@ -72,7 +86,7 @@ export function PushEnableCard() {
       if (!sub) {
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey),
+          applicationServerKey: urlBase64ToUint8Array(key),
         });
       }
 
@@ -89,6 +103,7 @@ export function PushEnableCard() {
         return;
       }
       setSubscribed(true);
+      setConfigured(true);
       setMessage("Notifikasi web push aktif.");
     });
   }
@@ -107,39 +122,65 @@ export function PushEnableCard() {
     });
   }
 
+  if (!ready) {
+    return (
+      <div id="push" className="space-y-3">
+        <Button type="button" disabled>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Memuat…
+        </Button>
+      </div>
+    );
+  }
+
   if (!supported) {
     return (
-      <p className="text-sm text-[var(--muted)]">
-        Browser ini tidak mendukung Web Push. Gunakan Chrome/Edge di Android atau desktop (HTTPS).
-      </p>
+      <div id="push" className="space-y-2">
+        <p className="text-sm text-[var(--muted)]">
+          Browser ini tidak mendukung Web Push. Pakai Chrome/Edge (Android atau desktop) lewat HTTPS.
+        </p>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-[var(--muted)]">
-        Aktifkan agar pemberitahuan surat/disposisi/validasi muncul meski tab tidak terbuka.
-        {permission === "granted" && subscribed ? " Status: aktif." : null}
-      </p>
+    <div id="push" className="space-y-3">
+      {!compact ? (
+        <p className="text-sm text-[var(--muted)]">
+          Aktifkan agar pemberitahuan surat/disposisi/validasi muncul di perangkat, meski tab ditutup.
+          {permission === "granted" && subscribed ? " Status: aktif." : null}
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         {!subscribed ? (
-          <Button type="button" onClick={enable} disabled={pending || !configured}>
+          <Button type="button" onClick={enable} disabled={pending} size={compact ? "sm" : "default"}>
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
             Aktifkan notifikasi push
           </Button>
         ) : (
-          <Button type="button" variant="secondary" onClick={disable} disabled={pending}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={disable}
+            disabled={pending}
+            size={compact ? "sm" : "default"}
+          >
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <BellOff className="h-4 w-4" />}
             Matikan push
           </Button>
         )}
       </div>
-      {!configured ? (
-        <p className="text-sm text-amber-800">
-          Admin perlu mengisi NEXT_PUBLIC_VAPID_PUBLIC_KEY dan VAPID_PRIVATE_KEY di env.
+      {!publicKey && !configured ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Env VAPID belum terpasang di server. Isi NEXT_PUBLIC_VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY di
+          Vercel, lalu Redeploy.
         </p>
       ) : null}
-      {message ? <p className="text-sm text-[var(--ink)]">{message}</p> : null}
+      {message ? (
+        <p className="rounded-xl border border-[var(--line)] bg-[var(--mist)] px-3 py-2 text-sm">
+          {message}
+        </p>
+      ) : null}
     </div>
   );
 }

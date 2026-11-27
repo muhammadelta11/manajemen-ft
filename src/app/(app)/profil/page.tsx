@@ -33,7 +33,7 @@ export default async function ProfilPage() {
         </div>
       </section>
 
-      <section className="panel max-w-xl p-6">
+      <section id="push" className="panel max-w-xl scroll-mt-24 p-6">
         <h2 className="text-lg font-semibold">Notifikasi web push</h2>
         <div className="mt-3">
           <PushEnableCard />
