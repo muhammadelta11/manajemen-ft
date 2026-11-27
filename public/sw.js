@@ -1,5 +1,5 @@
-/* Manajemen FT — service worker (installable PWA) */
-const CACHE = "mft-shell-v1";
+/* Manajemen FT — service worker (PWA + Web Push) */
+const CACHE = "mft-shell-v2";
 const PRECACHE = ["/", "/login", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -27,7 +27,6 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // Jangan cache API / auth / stream
   if (
     url.pathname.startsWith("/api/") ||
     url.pathname.startsWith("/login") ||
@@ -36,7 +35,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Network-first untuk navigasi HTML; cache-first untuk aset statis
   if (req.mode === "navigate") {
     event.respondWith(
       fetch(req)
@@ -62,4 +60,44 @@ self.addEventListener("fetch", (event) => {
       }),
     );
   }
+});
+
+self.addEventListener("push", (event) => {
+  let data = {
+    title: "Manajemen FT",
+    body: "Ada pemberitahuan baru",
+    url: "/notifikasi",
+  };
+  try {
+    if (event.data) data = { ...data, ...event.data.json() };
+  } catch {
+    /* ignore */
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Manajemen FT", {
+      body: data.body || "",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: data.url || "/notifikasi" },
+      tag: "mft-notif",
+      renotify: true,
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = event.notification.data?.url || "/notifikasi";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ("focus" in client) {
+          client.navigate(target);
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(target);
+    }),
+  );
 });

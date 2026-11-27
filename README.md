@@ -39,8 +39,16 @@ Root Directory: **kosong** (repo root).
 Environment Variables: sama seperti `.env.local`, plus:
 
 - `AUTH_URL` = `https://your-app.vercel.app`
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` (Web Push)
 
 Tidak perlu Prisma Postgres Vercel. Cukup Supabase.
+
+### Web Push
+
+1. Generate kunci: `npx web-push generate-vapid-keys`
+2. Isi env lokal + Vercel.
+3. Login → **Pengaturan** → **Aktifkan notifikasi push** (butuh HTTPS di produksi; localhost OK).
+4. Saat ada disposisi/validasi/surat baru, OS notification muncul jika izin aktif.
 
 ## Akun demo (password: `Password123!`)
 

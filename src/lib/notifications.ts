@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendWebPushToUser, sendWebPushToUsers } from "@/lib/push";
 
 export async function notifyUser(input: {
   userId: string;
@@ -14,6 +15,12 @@ export async function notifyUser(input: {
     judul: input.judul,
     pesan: input.pesan,
     link_path: input.linkPath ?? null,
+  });
+
+  void sendWebPushToUser(input.userId, {
+    title: input.judul,
+    body: input.pesan,
+    url: input.linkPath || "/notifikasi",
   });
 }
 
@@ -32,4 +39,10 @@ export async function notifyUsers(
       link_path: input.linkPath ?? null,
     })),
   );
+
+  void sendWebPushToUsers(userIds, {
+    title: input.judul,
+    body: input.pesan,
+    url: input.linkPath || "/notifikasi",
+  });
 }
