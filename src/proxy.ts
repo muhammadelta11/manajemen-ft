@@ -11,7 +11,8 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     pathname.startsWith("/images") ||
-    pathname.startsWith("/uploads")
+    pathname.startsWith("/uploads") ||
+    pathname.match(/\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|woff2?)$/i)
   ) {
     return NextResponse.next();
   }
@@ -33,7 +34,6 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  // getSession = baca JWT lokal (tanpa round-trip Auth API) — jauh lebih cepat di edge
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -45,7 +45,11 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname === "/login") {
-    if (isLoggedIn) return NextResponse.redirect(new URL("/dashboard", request.url));
+    if (isLoggedIn) {
+      const profile = await decodeProfile(request.cookies.get(PROFILE_COOKIE)?.value);
+      const dest = profile ? homeHint(profile.role) : "/dashboard";
+      return NextResponse.redirect(new URL(dest, request.url));
+    }
     return response;
   }
 
@@ -59,12 +63,20 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(login);
   }
 
-  const profile = decodeProfile(request.cookies.get(PROFILE_COOKIE)?.value);
+  const profile = await decodeProfile(request.cookies.get(PROFILE_COOKIE)?.value);
   if (profile && profile.id === session!.user.id && !canAccessPath(profile, pathname)) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return response;
+}
+
+function homeHint(role: string) {
+  if (role === "admin_arsip") return "/surat";
+  if (role === "admin_kepegawaian") return "/aktivitas";
+  if (role === "pegawai") return "/aktivitas";
+  if (role === "pimpinan") return "/disposisi";
+  return "/dashboard";
 }
 
 export const config = {

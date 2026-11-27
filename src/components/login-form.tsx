@@ -1,13 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { finalizeLoginAction } from "@/app/actions/auth";
+import { useRouter } from "next/navigation";
+import { seedProfileCookieAction } from "@/app/actions/auth";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
+import { homeForRole } from "@/lib/rbac";
+import type { AppRole } from "@/lib/roles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function LoginForm() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -24,19 +28,45 @@ export function LoginForm() {
         return;
       }
 
-      const { error: signError } = await supabase.auth.signInWithPassword({
+      const { data: authData, error: signError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
       });
 
-      if (signError) {
+      if (signError || !authData.user) {
         setError("Email atau kata sandi salah.");
         return;
       }
 
-      // Cookie sesi sudah di browser; finalize set profil + redirect server-side
-      const result = await finalizeLoginAction();
-      if (result?.error) setError(result.error);
+      const { data: profile, error: profileError } = await supabase
+        .from("users")
+        .select("id, nama, email, role, is_kaprodi, prodi_id, is_active")
+        .eq("id", authData.user.id)
+        .maybeSingle();
+
+      if (profileError || !profile || !profile.is_active) {
+        await supabase.auth.signOut();
+        setError("Akun tidak aktif atau profil belum tersedia.");
+        return;
+      }
+
+      const seeded = await seedProfileCookieAction({
+        id: profile.id,
+        name: profile.nama,
+        email: profile.email,
+        role: profile.role,
+        isKaprodi: Boolean(profile.is_kaprodi),
+        prodiId: profile.prodi_id ?? null,
+      });
+
+      if (seeded.error) {
+        setError(seeded.error);
+        return;
+      }
+
+      const dest = homeForRole(profile.role as AppRole);
+      router.replace(dest);
+      router.refresh();
     });
   }
 

@@ -47,13 +47,15 @@ export function useNotificationStream(initialUnread: number) {
 
       es.onerror = () => {
         es?.close();
-        retry = setTimeout(connect, 5000);
+        retry = setTimeout(connect, 8000);
       };
     };
 
-    connect();
+    // Tunda SSE agar tidak bersaing dengan navigasi/login pertama
+    const start = window.setTimeout(connect, 1200);
     return () => {
       alive = false;
+      window.clearTimeout(start);
       es?.close();
       if (retry) clearTimeout(retry);
     };

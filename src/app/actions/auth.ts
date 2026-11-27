@@ -1,56 +1,66 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { homeForRole, type SessionUser } from "@/lib/rbac";
+import type { SessionUser } from "@/lib/rbac";
 import type { AppRole } from "@/lib/roles";
-import type { UserRow } from "@/lib/types";
 import { clearProfileCookie, setProfileCookie } from "@/lib/profile-cookie";
 
-export type LoginState = {
-  error?: string;
-};
+const ROLES: AppRole[] = [
+  "super_admin",
+  "admin_arsip",
+  "admin_kepegawaian",
+  "pegawai",
+  "pimpinan",
+];
 
-/** Dipanggil setelah login browser — set cookie profil + arahkan ke home role. */
-export async function finalizeLoginAction(): Promise<LoginState> {
+/** Set cookie profil setelah login browser — tanpa redirect (client yang navigasi). */
+export async function seedProfileCookieAction(input: {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  isKaprodi: boolean;
+  prodiId: string | null;
+}): Promise<{ error?: string }> {
   const supabase = await createClient();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (!user) {
-    return { error: "Sesi login tidak ditemukan. Coba lagi." };
+  if (!session?.user?.id || session.user.id !== input.id) {
+    return { error: "Sesi login tidak valid." };
   }
 
-  const { data: profile, error } = await supabase
+  if (!ROLES.includes(input.role as AppRole)) {
+    return { error: "Role tidak dikenal." };
+  }
+
+  // Ambil profil dari DB sekali (sumber kebenaran), bukan percaya payload client mentah
+  const { data: profile } = await supabase
     .from("users")
     .select("id, nama, email, role, is_kaprodi, prodi_id, is_active")
-    .eq("id", user.id)
+    .eq("id", session.user.id)
     .maybeSingle();
 
-  if (error || !profile || !(profile as UserRow).is_active) {
-    await supabase.auth.signOut();
-    await clearProfileCookie();
+  if (!profile || !profile.is_active) {
     return { error: "Akun tidak aktif atau profil belum tersedia." };
   }
 
-  const p = profile as UserRow;
-  const session: SessionUser = {
-    id: p.id,
-    name: p.nama,
-    email: p.email,
-    role: p.role as AppRole,
-    isKaprodi: p.is_kaprodi,
-    prodiId: p.prodi_id,
+  const user: SessionUser = {
+    id: profile.id,
+    name: profile.nama,
+    email: profile.email,
+    role: profile.role as AppRole,
+    isKaprodi: Boolean(profile.is_kaprodi),
+    prodiId: profile.prodi_id ?? null,
   };
 
-  await setProfileCookie(session);
-  redirect(homeForRole(session.role));
+  await setProfileCookie(user);
+  return {};
 }
 
-export async function logoutAction() {
+export async function clearSessionAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   await clearProfileCookie();
-  redirect("/login");
 }

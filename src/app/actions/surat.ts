@@ -132,15 +132,16 @@ export async function createDisposisiAction(formData: FormData) {
   });
   if (dErr) throw new Error(dErr.message);
 
-  await admin.from("surat").update({ status: "didisposisi" }).eq("id", suratId);
-
-  await notifyUser({
-    userId: tujuanUserId,
-    tipe: "disposisi_baru",
-    judul: "Disposisi baru",
-    pesan: catatanDisposisi.slice(0, 200),
-    linkPath: `/disposisi`,
-  });
+  await Promise.all([
+    admin.from("surat").update({ status: "didisposisi" }).eq("id", suratId),
+    notifyUser({
+      userId: tujuanUserId,
+      tipe: "disposisi_baru",
+      judul: "Disposisi baru",
+      pesan: catatanDisposisi.slice(0, 200),
+      linkPath: `/disposisi`,
+    }),
+  ]);
 
   revalidatePath(`/surat/${suratId}`);
   revalidatePath("/disposisi");

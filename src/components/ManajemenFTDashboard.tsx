@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { logoutAction } from "@/app/actions/auth";
+import { clearSessionAction } from "@/app/actions/auth";
+import { createBrowserSupabase } from "@/lib/supabase/browser";
 import {
   LayoutDashboard,
   Bell,
@@ -428,6 +429,7 @@ export default function ManajemenFTDashboard({
               <Link
                 key={href}
                 href={href}
+                prefetch
                 className={`mft-nav-item ${active ? "active" : ""}`}
                 onClick={() => setMobileOpen(false)}
               >
@@ -448,11 +450,18 @@ export default function ManajemenFTDashboard({
               <strong>{user.name}</strong>
               <span>{roleLabel(user.role, user.isKaprodi)}</span>
             </div>
-            <form action={logoutAction}>
-              <button aria-label="Keluar" className="mft-logout" type="submit">
-                <LogOut size={17} />
-              </button>
-            </form>
+            <button
+              aria-label="Keluar"
+              className="mft-logout"
+              type="button"
+              onClick={async () => {
+                const sb = createBrowserSupabase();
+                await Promise.allSettled([sb?.auth.signOut(), clearSessionAction()]);
+                window.location.replace("/login");
+              }}
+            >
+              <LogOut size={17} />
+            </button>
           </div>
         </div>
       </aside>
@@ -524,6 +533,7 @@ export default function ManajemenFTDashboard({
             <Link
               key={href}
               href={href}
+              prefetch
               className={`mft-bottom-item ${active ? "active" : ""}`}
             >
               <span className="mft-bottom-icon">

@@ -1,11 +1,11 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import type { SessionUser } from "@/lib/rbac";
 import { createClient } from "@/lib/supabase/server";
 import type { UserRow } from "@/lib/types";
 import type { AppRole } from "@/lib/roles";
 import { decodeProfile, PROFILE_COOKIE, setProfileCookie } from "@/lib/profile-cookie";
-import { cookies } from "next/headers";
 
 function toSessionUser(p: UserRow): SessionUser {
   return {
@@ -18,58 +18,65 @@ function toSessionUser(p: UserRow): SessionUser {
   };
 }
 
-/** Satu kali per request RSC (layout + page share hasil). */
+/**
+ * Fast path: cookie profil bertanda tangan + JWT lokal (getSession).
+ * Tidak memanggil Auth API / tabel users kecuali cookie hilang.
+ */
 export const requireUser = cache(async (): Promise<SessionUser> => {
+  const jar = await cookies();
+  const cached = await decodeProfile(jar.get(PROFILE_COOKIE)?.value);
+
   const supabase = await createClient();
   const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (authError || !user) redirect("/login");
-
-  // Cookie profil (diisi saat login) — hindari query users bila masih valid
-  const jar = await cookies();
-  const cached = decodeProfile(jar.get(PROFILE_COOKIE)?.value);
-  if (cached && cached.id === user.id) {
+  if (cached && session?.user?.id === cached.id) {
     return cached;
   }
+
+  if (!session?.user) redirect("/login");
 
   const { data: profile, error } = await supabase
     .from("users")
     .select("id, nama, email, role, is_kaprodi, prodi_id, is_active")
-    .eq("id", user.id)
+    .eq("id", session.user.id)
     .maybeSingle();
 
   if (error || !profile || !(profile as UserRow).is_active) {
     redirect("/login");
   }
 
-  const session = toSessionUser(profile as UserRow);
+  const sessionUser = toSessionUser(profile as UserRow);
   try {
-    await setProfileCookie(session);
+    await setProfileCookie(sessionUser);
   } catch {
-    // Server Component kadang read-only untuk cookie
+    /* read-only cookies di sebagian RSC */
   }
-  return session;
+  return sessionUser;
+});
+
+/** Hanya baca cookie — untuk shell layout (0 round-trip DB/Auth). */
+export const getUserFromCookie = cache(async (): Promise<SessionUser | null> => {
+  const jar = await cookies();
+  return decodeProfile(jar.get(PROFILE_COOKIE)?.value);
 });
 
 export const getOptionalUser = cache(async (): Promise<SessionUser | null> => {
   try {
+    const jar = await cookies();
+    const cached = await decodeProfile(jar.get(PROFILE_COOKIE)?.value);
     const supabase = await createClient();
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    const jar = await cookies();
-    const cached = decodeProfile(jar.get(PROFILE_COOKIE)?.value);
-    if (cached && cached.id === user.id) return cached;
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (cached && session?.user?.id === cached.id) return cached;
+    if (!session?.user) return null;
 
     const { data: profile } = await supabase
       .from("users")
       .select("id, nama, email, role, is_kaprodi, prodi_id, is_active")
-      .eq("id", user.id)
+      .eq("id", session.user.id)
       .maybeSingle();
 
     if (!profile || !(profile as UserRow).is_active) return null;

@@ -4,11 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export async function GET(request: Request) {
   const supabase = await createClient();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user) return new Response("Unauthorized", { status: 401 });
 
-  const userId = user.id;
+  const userId = session.user.id;
   const encoder = new TextEncoder();
   let closed = false;
 
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
       send("connected", { ok: true });
       void tick();
 
-      const poll = setInterval(() => void tick(), 4000);
+      const poll = setInterval(() => void tick(), 8000);
       const heartbeat = setInterval(() => {
         if (closed) return;
         controller.enqueue(encoder.encode(`: ping\n\n`));
