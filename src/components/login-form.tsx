@@ -6,6 +6,7 @@ import { seedProfileCookieAction } from "@/app/actions/auth";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { homeForRole } from "@/lib/rbac";
 import type { AppRole } from "@/lib/roles";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -104,8 +105,15 @@ export function LoginForm() {
         </p>
       ) : null}
 
-      <Button type="submit" className="w-full" size="lg" disabled={pending}>
-        {pending ? "Memproses…" : "Masuk ke ruang kerja"}
+      <Button type="submit" className="w-full" size="lg" disabled={pending} aria-busy={pending}>
+        {pending ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            Memproses…
+          </>
+        ) : (
+          "Masuk ke ruang kerja"
+        )}
       </Button>
     </form>
   );

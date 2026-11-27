@@ -61,8 +61,15 @@ export function ExportForm({
         </div>
       </div>
       {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
-      <Button className="mt-4" type="button" onClick={onExport} disabled={pending}>
-        {pending ? "Menyiapkan…" : "Unduh Excel"}
+      <Button className="mt-4" type="button" onClick={onExport} disabled={pending} aria-busy={pending}>
+        {pending ? (
+          <>
+            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
+            Menyiapkan…
+          </>
+        ) : (
+          "Unduh Excel"
+        )}
       </Button>
     </div>
   );

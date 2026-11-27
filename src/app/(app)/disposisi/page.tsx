@@ -2,7 +2,7 @@ import { requireUser } from "@/lib/session";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { updateTindakLanjutAction } from "@/app/actions/surat";
@@ -90,12 +90,17 @@ export default async function DisposisiPage() {
                 <Label htmlFor={`catatan-${d.id}`}>Catatan tindak lanjut</Label>
                 <Textarea id={`catatan-${d.id}`} name="catatanTindakLanjut" />
                 <div className="flex gap-2">
-                  <Button type="submit" name="statusTindakLanjut" value="proses" variant="secondary">
+                  <SubmitButton
+                    name="statusTindakLanjut"
+                    value="proses"
+                    variant="secondary"
+                    pendingLabel="Memproses…"
+                  >
                     Proses
-                  </Button>
-                  <Button type="submit" name="statusTindakLanjut" value="selesai">
+                  </SubmitButton>
+                  <SubmitButton name="statusTindakLanjut" value="selesai" pendingLabel="Menyimpan…">
                     Selesai
-                  </Button>
+                  </SubmitButton>
                 </div>
               </form>
             </li>

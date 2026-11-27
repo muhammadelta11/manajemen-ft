@@ -3,7 +3,7 @@ import { createSuratAction } from "@/app/actions/surat";
 import { requireUser } from "@/lib/session";
 import { canManageSurat } from "@/lib/rbac";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -101,7 +101,7 @@ export default async function SuratBaruPage() {
           <input type="checkbox" name="butuhDisposisi" defaultChecked className="rounded border-stone-300" />
           Butuh disposisi pimpinan (untuk surat masuk)
         </label>
-        <Button type="submit">Simpan</Button>
+        <SubmitButton pendingLabel="Menyimpan…">Simpan surat</SubmitButton>
       </form>
     </div>
   );

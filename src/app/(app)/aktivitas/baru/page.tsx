@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createAktivitasAction } from "@/app/actions/aktivitas";
 import { requireUser } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -114,7 +114,7 @@ export default async function AktivitasBaruPage() {
           <input type="checkbox" name="ajukan" className="rounded border-stone-300" />
           Langsung ajukan ke Kaprodi
         </label>
-        <Button type="submit">Simpan</Button>
+        <SubmitButton pendingLabel="Menyimpan…">Simpan aktivitas</SubmitButton>
       </form>
     </div>
   );

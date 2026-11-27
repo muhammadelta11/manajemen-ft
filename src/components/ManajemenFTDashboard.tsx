@@ -38,6 +38,7 @@ import {
   NotificationToast,
   useNotificationStream,
 } from "@/components/notification-realtime";
+import { PwaInstallBanner } from "@/components/pwa-install";
 import "./manajemen-ft-dashboard.css";
 
 export type MftStat = {
@@ -560,6 +561,7 @@ export default function ManajemenFTDashboard({
       </nav>
 
       <NotificationToast message={toast} onClose={dismissToast} />
+      <PwaInstallBanner />
     </main>
   );
 }

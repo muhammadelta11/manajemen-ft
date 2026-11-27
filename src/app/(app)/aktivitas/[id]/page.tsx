@@ -3,7 +3,7 @@ import { ajukanAktivitasAction } from "@/app/actions/aktivitas";
 import { requireUser } from "@/lib/session";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const instant = false;
@@ -77,7 +77,7 @@ export default async function AktivitasDetailPage({
       {canAjukan ? (
         <form action={ajukanAktivitasAction}>
           <input type="hidden" name="id" value={aktivitas.id} />
-          <Button type="submit">Ajukan ke Kaprodi</Button>
+          <SubmitButton pendingLabel="Mengajukan…">Ajukan ke Kaprodi</SubmitButton>
         </form>
       ) : null}
 

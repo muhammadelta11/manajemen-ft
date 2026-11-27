@@ -2,7 +2,7 @@ import { requireUser } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { validateAktivitasAction } from "@/app/actions/aktivitas";
@@ -40,12 +40,17 @@ export default async function ValidasiPage() {
               <Label htmlFor={`catatan-${a.id}`}>Catatan</Label>
               <Textarea id={`catatan-${a.id}`} name="catatan" />
               <div className="flex gap-2">
-                <Button type="submit" name="keputusan" value="disetujui">
+                <SubmitButton name="keputusan" value="disetujui" pendingLabel="Menyetujui…">
                   Setujui
-                </Button>
-                <Button type="submit" name="keputusan" value="revisi" variant="secondary">
+                </SubmitButton>
+                <SubmitButton
+                  name="keputusan"
+                  value="revisi"
+                  variant="secondary"
+                  pendingLabel="Mengirim…"
+                >
                   Minta revisi
-                </Button>
+                </SubmitButton>
               </div>
             </form>
           </li>

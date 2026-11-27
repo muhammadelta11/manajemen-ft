@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/session";
 import { canCreateDisposisi } from "@/lib/rbac";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -127,7 +127,7 @@ export default async function SuratDetailPage({
               <Label htmlFor="catatanDisposisi">Catatan disposisi</Label>
               <Textarea id="catatanDisposisi" name="catatanDisposisi" required />
             </div>
-            <Button type="submit">Kirim disposisi</Button>
+            <SubmitButton pendingLabel="Mengirim…">Kirim disposisi</SubmitButton>
           </form>
         </section>
       ) : null}
